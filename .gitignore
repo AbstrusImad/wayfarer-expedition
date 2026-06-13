@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+frontend/node_modules/
+tools/node_modules/
+
+# next.js
+frontend/.next/
+frontend/out/
+
+# build / cache
+*.tsbuildinfo
+frontend/next-env.d.ts
+
+# tests
+.gltest_cache/
+.pytest_cache/
+
+# secrets & env
+.env
+.env.local
+*.key
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.log

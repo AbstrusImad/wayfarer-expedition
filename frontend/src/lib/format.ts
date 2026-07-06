@@ -5,7 +5,7 @@ export const shortHash = (h?: string): string =>
   h && h.length >= 14 ? `${h.slice(0, 10)}\u2026${h.slice(-8)}` : h ?? '';
 
 export type Verdict = 'THRIVE' | 'STABLE' | 'SETBACK' | 'PERIL';
-export type RunStatus = 'ALIVE' | 'LOST' | 'ABANDONED';
+export type RunStatus = 'ALIVE' | 'LOST' | 'ABANDONED' | 'RESCUED';
 
 export interface Scenario {
   key: string;
@@ -32,6 +32,10 @@ export interface Run {
   vitality: number;
   status: RunStatus;
   turns: number;
+  stake: string;
+  claimed: boolean;
+  payout: string;
+  rescue_day: number;
   log?: LogEntry[];
 }
 
@@ -39,6 +43,18 @@ export interface Stats {
   expeditions: number;
   turns: number;
   active: number;
+  rescued?: number;
+  pot?: string;
+}
+
+export interface Economics {
+  pot: string;
+  committed: string;
+  total_staked: string;
+  total_paid: string;
+  min_stake: string;
+  max_stake: string;
+  rescue_day: number;
 }
 
 export const verdictColor = (v: Verdict): string => {
@@ -64,7 +80,34 @@ export const statusLabel: Record<RunStatus, string> = {
   ALIVE: 'In progress',
   LOST: 'Perished',
   ABANDONED: 'Abandoned',
+  RESCUED: 'Rescued',
 };
+
+const ATTO = 10n ** 18n;
+
+/** Format an atto-GEN string/bigint as a human GEN amount. */
+export function fromAtto(atto: string | bigint, maxFractionDigits = 4): string {
+  let v: bigint;
+  try {
+    v = typeof atto === 'bigint' ? atto : BigInt(atto || '0');
+  } catch {
+    return '0';
+  }
+  const whole = v / ATTO;
+  const frac = v % ATTO;
+  if (frac === 0n) return whole.toString();
+  const fracStr = frac.toString().padStart(18, '0').slice(0, maxFractionDigits).replace(/0+$/, '');
+  return fracStr ? `${whole.toString()}.${fracStr}` : whole.toString();
+}
+
+/** Parse a human GEN amount (e.g. "0.05") into an atto-GEN bigint. */
+export function toAtto(gen: string): bigint {
+  const clean = (gen || '').trim();
+  if (!clean || !/^\d*\.?\d*$/.test(clean)) return 0n;
+  const [whole = '0', frac = ''] = clean.split('.');
+  const fracPadded = (frac + '0'.repeat(18)).slice(0, 18);
+  return BigInt(whole || '0') * ATTO + BigInt(fracPadded || '0');
+}
 
 export async function copyText(text: string): Promise<boolean> {
   try {

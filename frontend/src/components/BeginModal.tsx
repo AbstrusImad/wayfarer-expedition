@@ -8,7 +8,11 @@ import { ExternalLinkChip } from './primitives';
 import { useToast } from './Toast';
 import type { useTransaction } from '@/hooks/useTransaction';
 import { FAUCET, explorerTx, writeBegin } from '@/lib/contract';
-import type { Scenario } from '@/lib/format';
+import { toAtto, type Scenario } from '@/lib/format';
+
+// Preset stakes (in GEN). Higher stake = larger share of the pot if rescued.
+const STAKE_PRESETS = ['0.01', '0.05', '0.1', '0.25'];
+const MIN_STAKE_GEN = 0.001;
 
 export const FALLBACK_SCENARIOS: Scenario[] = [
   { key: 'open-sea', title: 'Adrift on the Open Sea', brief: 'Your vessel sank at dawn. You cling to a life raft in cold, open water with a few salvaged supplies and no land in sight.' },
@@ -30,13 +34,18 @@ export function BeginModal({ open, onClose, scenarios, tx, canSubmit, onConnect 
   const toast = useToast();
   const list = scenarios.length ? scenarios : FALLBACK_SCENARIOS;
   const [picked, setPicked] = useState<string | null>(null);
+  const [stake, setStake] = useState('0.05');
   const [confirming, setConfirming] = useState(false);
+
+  const stakeNum = Number(stake);
+  const stakeValid = Number.isFinite(stakeNum) && stakeNum >= MIN_STAKE_GEN;
 
   const busy = tx.state.phase === 'wallet' || tx.state.phase === 'submitted' || tx.state.phase === 'consensus';
   const done = tx.state.phase === 'confirmed';
 
   const reset = () => {
     setPicked(null);
+    setStake('0.05');
     setConfirming(false);
     tx.reset();
   };
@@ -47,11 +56,12 @@ export function BeginModal({ open, onClose, scenarios, tx, canSubmit, onConnect 
   };
 
   const submit = async () => {
-    if (!picked) return;
+    if (!picked || !stakeValid) return;
     setConfirming(false);
+    const stakeWei = toAtto(stake);
     const id = toast.push({ kind: 'loading', message: 'Confirm the expedition in your wallet...' });
     const ok = await tx.run(async (client) => {
-      const hash = await writeBegin(client, picked);
+      const hash = await writeBegin(client, picked, stakeWei);
       toast.update(id, { kind: 'loading', message: 'Setting out on Bradbury...', hash });
       return hash;
     });
@@ -108,10 +118,41 @@ export function BeginModal({ open, onClose, scenarios, tx, canSubmit, onConnect 
             })}
           </div>
 
+          <div className="rounded-lg border border-fog/12 p-4">
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-xs font-semibold uppercase tracking-wide text-fog">Your stake</p>
+              <span className="font-mono text-[11px] text-fog-faint">min {MIN_STAKE_GEN} GEN</span>
+            </div>
+            <p className="mt-1.5 text-xs leading-relaxed text-fog-muted">
+              Escrowed on-chain. Survive to rescue day and claim it back plus a share of the pot forfeited by those who perished. Die or abandon and it feeds the pot.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {STAKE_PRESETS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setStake(p)}
+                  className={`rounded border px-3 py-1.5 font-mono text-xs transition-all ${
+                    stake === p ? 'border-amber/50 bg-amber/10 text-amber' : 'border-fog/15 text-fog-muted hover:border-fog/30'
+                  }`}
+                >
+                  {p} GEN
+                </button>
+              ))}
+              <input
+                inputMode="decimal"
+                value={stake}
+                onChange={(e) => setStake(e.target.value.replace(/[^\d.]/g, ''))}
+                aria-label="Custom stake in GEN"
+                className="w-24 rounded border border-fog/15 bg-transparent px-3 py-1.5 font-mono text-xs text-fog outline-none focus:border-amber/50"
+              />
+            </div>
+            {!stakeValid && <p className="mt-2 font-mono text-[11px] text-signal-peril">Enter at least {MIN_STAKE_GEN} GEN.</p>}
+          </div>
+
           {!confirming ? (
             <button
-              onClick={() => (canSubmit ? picked && setConfirming(true) : onConnect())}
-              disabled={canSubmit && !picked}
+              onClick={() => (canSubmit ? picked && stakeValid && setConfirming(true) : onConnect())}
+              disabled={canSubmit && (!picked || !stakeValid)}
               className="btn-amber flex w-full items-center justify-center gap-2 rounded py-3.5"
             >
               <Compass className="h-4 w-4" />
@@ -119,7 +160,7 @@ export function BeginModal({ open, onClose, scenarios, tx, canSubmit, onConnect 
             </button>
           ) : (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-lg border border-amber/25 bg-amber/5 p-4">
-              <p className="text-sm text-fog">This submits a transaction on Bradbury Testnet. Network fees apply (mostly refunded).</p>
+              <p className="text-sm text-fog">Staking <span className="font-mono text-amber">{stake} GEN</span> on Bradbury Testnet. The stake is escrowed by the contract; network fees also apply.</p>
               <p className="mt-1.5 text-xs text-fog-muted">
                 Need test GEN? <ExternalLinkChip href={FAUCET}>Claim from the faucet</ExternalLinkChip>
               </p>

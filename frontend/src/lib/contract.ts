@@ -1,9 +1,9 @@
 import { createClient } from 'genlayer-js';
 import { testnetBradbury } from 'genlayer-js/chains';
-import type { Run, Scenario, Stats } from './format';
+import type { Economics, Run, Scenario, Stats } from './format';
 
-export const CONTRACT_ADDRESS = '0xaC78973442416599Cf366812e9ba7B6d1545445B' as const;
-export const DEPLOY_TX = '0xab1d4ecf7bd73cef80a31d92920a87bcaf72c9e300ce71dc2d328dc3d4a5faf3' as const;
+export const CONTRACT_ADDRESS = '0x5EadA75Af09a1606f73661E4CAB80489D02ae230' as const;
+export const DEPLOY_TX = '0x6ffd574655eb01113d61e1184583102a83836a5d405b51360e054c06168a37f9' as const;
 export const EXPLORER = 'https://explorer-bradbury.genlayer.com';
 export const FAUCET = 'https://testnet-faucet.genlayer.foundation/';
 export const CHAIN_ID = 4221;
@@ -46,6 +46,10 @@ function normalizeRun(o: Record<string, unknown>): Run {
     vitality: Number(o.vitality ?? 0),
     status: (String(o.status ?? 'ALIVE') as Run['status']),
     turns: Number(o.turns ?? 0),
+    stake: String(o.stake ?? '0'),
+    claimed: Boolean(o.claimed ?? false),
+    payout: String(o.payout ?? '0'),
+    rescue_day: Number(o.rescue_day ?? 5),
     log: rawLog?.map((e) => ({
       day: Number(e.day ?? 0),
       action: String(e.action ?? ''),
@@ -63,6 +67,22 @@ export async function fetchStats(): Promise<Stats> {
   );
   const o = raw as Record<string, unknown>;
   return { expeditions: Number(o.expeditions ?? 0), turns: Number(o.turns ?? 0), active: Number(o.active ?? 0) };
+}
+
+export async function fetchEconomics(): Promise<Economics> {
+  const raw = await withRpcRetry(() =>
+    readClient.readContract({ address: CONTRACT_ADDRESS, functionName: 'get_economics', args: [] }),
+  );
+  const o = raw as Record<string, unknown>;
+  return {
+    pot: String(o.pot ?? '0'),
+    committed: String(o.committed ?? '0'),
+    total_staked: String(o.total_staked ?? '0'),
+    total_paid: String(o.total_paid ?? '0'),
+    min_stake: String(o.min_stake ?? '0'),
+    max_stake: String(o.max_stake ?? '0'),
+    rescue_day: Number(o.rescue_day ?? 5),
+  };
 }
 
 export async function fetchScenarios(): Promise<Scenario[]> {
@@ -99,13 +119,14 @@ export async function fetchLeaderboard(start = 0): Promise<Run[]> {
 
 // ---------------- writes ----------------
 
+// begin_expedition is payable: the attached GEN (atto) is the survivor's stake.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function writeBegin(client: any, scenarioKey: string): Promise<`0x${string}`> {
+export async function writeBegin(client: any, scenarioKey: string, stakeWei: bigint): Promise<`0x${string}`> {
   return client.writeContract({
     address: CONTRACT_ADDRESS,
     functionName: 'begin_expedition',
     args: [scenarioKey],
-    value: BigInt(0),
+    value: stakeWei,
   });
 }
 
@@ -115,6 +136,27 @@ export async function writeAction(client: any, runId: string, action: string): P
     address: CONTRACT_ADDRESS,
     functionName: 'take_action',
     args: [runId, action],
+    value: BigInt(0),
+  });
+}
+
+// A rescued survivor claims their stake back plus the pot bonus.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function writeClaim(client: any, runId: string): Promise<`0x${string}`> {
+  return client.writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: 'claim_rescue',
+    args: [runId],
+    value: BigInt(0),
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function writeAbandon(client: any, runId: string): Promise<`0x${string}`> {
+  return client.writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: 'abandon_expedition',
+    args: [runId],
     value: BigInt(0),
   });
 }

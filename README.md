@@ -3,8 +3,8 @@
 *Survive by your wits, not your luck.* A survival simulator built on [GenLayer](https://genlayer.com) where an AI warden judges every decision under validator consensus, and your fate is settled on-chain where no one can rewrite it.
 
 - **Live dApp:** https://abstrusimad.github.io/wayfarer-expedition/
-- **Contract (Bradbury explorer):** https://explorer-bradbury.genlayer.com/address/0xaC78973442416599Cf366812e9ba7B6d1545445B
-- **Deployment transaction:** https://explorer-bradbury.genlayer.com/tx/0xab1d4ecf7bd73cef80a31d92920a87bcaf72c9e300ce71dc2d328dc3d4a5faf3
+- **Contract (Bradbury explorer):** https://explorer-bradbury.genlayer.com/address/0x5EadA75Af09a1606f73661E4CAB80489D02ae230
+- **Deployment transaction:** https://explorer-bradbury.genlayer.com/tx/0x6ffd574655eb01113d61e1184583102a83836a5d405b51360e054c06168a37f9
 
 ---
 
@@ -21,6 +21,23 @@ The signature action is `take_action`. When you describe a survival decision, th
 - Agreement rule: the help/harm **sign must match** (a move can't be helpful to one validator and harmful to another), and the deltas must fall within a tolerance of 10 points. The categorical verdict shown in the UI (`THRIVE` / `STABLE` / `SETBACK` / `PERIL`) is **derived deterministically from the consensus delta after the round** — the prompt deters bad calls, the code enforces the result.
 
 `strict_eq` is deliberately never used around the LLM call (it would land `UNDETERMINED` because validator outputs differ). Starting an expedition (`begin_expedition`) is a deterministic fast path with no AI, so it confirms instantly.
+
+## Survival Stakes — real economic consensus
+
+Wayfarer is not just recreational: every expedition carries a **GEN stake**, and the AI's judgment settles real money. This is what makes decentralized consensus *essential* rather than merely nice-to-have — a manipulated single node could otherwise hand itself a payout.
+
+- `begin_expedition` is **payable**. The attached GEN is escrowed in the contract as your stake and counted as `committed`.
+- Reach the **rescue day** alive and your run becomes `RESCUED`; you may `claim_rescue`.
+- Die (vitality hits 0) or abandon, and your stake is **forfeited into a shared pot**.
+- A rescued survivor claims **their stake back plus a bonus** drawn from the pot.
+
+### Safety model (why it cannot be drained)
+
+- **The AI never decides a payout.** It only moves vitality. The win condition (`day >= RESCUE_DAY` and `vitality > 0`) is fully deterministic in contract code. Real GEN therefore settles on a judgment many validators must independently agree on, but no single node — or a jailbroken LLM — can mint a win.
+- **The pot is only funded by real forfeits.** A winner's bonus is capped at the current pot balance (`bonus = min(pot, stake)`), so the contract can never pay out more GEN than losers actually forfeited. The escrow is always solvent.
+- **Reentrancy-safe claims.** `claim_rescue` marks the run `claimed`, debits the pot, and updates accounting *before* emitting the native transfer (`emit_transfer(on="finalized")`). Only the owner, only once, only for a `RESCUED` run.
+- **Atto-scale integer math.** All escrow accounting uses `u256` at atto scale (never floats), with saturating subtraction so balances can never underflow.
+- **Prompt-injection hardened.** Decision text is untrusted data, capped at 500 chars; the warden prompt explicitly rejects attempts to claim invulnerability, demand a positive outcome, or mention stakes/rewards/payouts, and treats them as reckless (strongly negative delta).
 
 ### Architecture boundary
 
@@ -51,10 +68,12 @@ There is no server and no database. All authoritative state (scenarios, runs, vi
 
 | Method | Kind | Signature | Notes |
 | --- | --- | --- | --- |
-| `begin_expedition` | write (deterministic) | `(scenario_key: str) -> str` | Starts a run at full vitality on day 1. Instant. |
-| `take_action` | write (AI consensus) | `(run_id: str, action: str) -> str` | Warden judges the decision under consensus; updates vitality, day, and the log. |
-| `abandon_expedition` | write (deterministic) | `(run_id: str) -> None` | Owner ends their own run. |
-| `get_stats` | view | `() -> dict` | `{expeditions, turns, active}`. |
+| `begin_expedition` | write (deterministic, **payable**) | `(scenario_key: str) -> str` | Escrows the attached GEN stake and starts a run at full vitality on day 1. Instant. |
+| `take_action` | write (AI consensus) | `(run_id: str, action: str) -> str` | Warden judges the decision under consensus; updates vitality, day, and the log. Deterministically settles `RESCUED` at rescue day or `LOST` (stake forfeited) at zero vitality. |
+| `claim_rescue` | write (deterministic) | `(run_id: str) -> str` | A rescued owner claims stake + capped pot bonus; reentrancy-safe. |
+| `abandon_expedition` | write (deterministic) | `(run_id: str) -> None` | Owner ends their own run; stake is forfeited to the pot. |
+| `get_stats` | view | `() -> dict` | `{expeditions, turns, active, rescued, pot}`. |
+| `get_economics` | view | `() -> dict` | Live escrow: `{pot, committed, total_staked, total_paid, min_stake, max_stake, rescue_day}`. |
 | `get_scenarios` | view | `() -> list` | The fixed scenario set (source of truth for the UI). |
 | `get_runs` | view | `(start: u256) -> list` | Newest-first page of runs (log omitted for the list). |
 | `get_run` | view | `(run_id: str) -> dict` | A single run including its full decision log. |

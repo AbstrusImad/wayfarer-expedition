@@ -17,17 +17,21 @@ import { ToastProvider } from '@/components/Toast';
 import { useWallet } from '@/hooks/useWallet';
 import { useContractData } from '@/hooks/useContractData';
 import { useTransaction } from '@/hooks/useTransaction';
+import { useToast } from '@/components/Toast';
+import { writeClaim } from '@/lib/contract';
 import type { Run } from '@/lib/format';
 
 function Wayfarer() {
   const wallet = useWallet();
   const data = useContractData();
+  const toast = useToast();
 
   const [beginOpen, setBeginOpen] = useState(false);
   const [actionRun, setActionRun] = useState<Run | null>(null);
   const [detailRun, setDetailRun] = useState<Run | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [claiming, setClaiming] = useState(false);
 
   const boardRef = useRef<HTMLDivElement>(null);
   const canSubmit = !!wallet.address && wallet.onCorrectChain;
@@ -63,6 +67,29 @@ function Wayfarer() {
   };
 
   const ownerOf = (r: Run) => !!wallet.address && r.owner.toLowerCase() === wallet.address.toLowerCase();
+
+  const handleClaim = useCallback(
+    async (r: Run) => {
+      setClaiming(true);
+      const id = toast.push({ kind: 'loading', message: 'Confirm the claim in your wallet...' });
+      try {
+        const ok = await tx.run(async (client) => {
+          const hash = await writeClaim(client, r.id);
+          toast.update(id, { kind: 'loading', message: 'Releasing your reward on Bradbury...', hash });
+          return hash;
+        });
+        if (ok) {
+          toast.update(id, { kind: 'success', message: 'Reward on its way to your wallet.', hash: tx.state.hash ?? undefined });
+          setDetailRun(null);
+        } else {
+          toast.update(id, { kind: 'error', message: tx.state.error ?? 'The claim could not be completed.' });
+        }
+      } finally {
+        setClaiming(false);
+      }
+    },
+    [toast, tx],
+  );
 
   return (
     <>
@@ -154,6 +181,8 @@ function Wayfarer() {
         onClose={() => setDetailRun(null)}
         run={detailRun}
         onContinue={openAction}
+        onClaim={handleClaim}
+        claiming={claiming}
         canAct={canSubmit}
         isOwner={!!detailRun && ownerOf(detailRun)}
         refreshKey={refreshKey}

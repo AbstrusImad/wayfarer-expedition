@@ -4,20 +4,23 @@ import { Heart, Loader2, Play, Skull } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from './Modal';
 import { CopyButton } from './primitives';
+import { Award } from 'lucide-react';
 import { fetchRun } from '@/lib/contract';
-import { shortAddr, statusLabel, verdictColor, vitalityColor, type Run } from '@/lib/format';
+import { fromAtto, shortAddr, statusLabel, verdictColor, vitalityColor, type Run } from '@/lib/format';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   run: Run | null;
   onContinue: (r: Run) => void;
+  onClaim: (r: Run) => void;
+  claiming: boolean;
   canAct: boolean;
   isOwner: boolean;
   refreshKey: number;
 }
 
-export function RunDetail({ open, onClose, run, onContinue, canAct, isOwner, refreshKey }: Props) {
+export function RunDetail({ open, onClose, run, onContinue, onClaim, claiming, canAct, isOwner, refreshKey }: Props) {
   const [full, setFull] = useState<Run | null>(run);
   const [loading, setLoading] = useState(false);
 
@@ -55,6 +58,10 @@ export function RunDetail({ open, onClose, run, onContinue, canAct, isOwner, ref
             <span className="inline-flex items-center gap-1.5 rounded-full border border-signal-thrive/30 px-2.5 py-1 font-mono text-[11px] text-signal-thrive">
               <span className="h-1.5 w-1.5 rounded-full bg-signal-thrive animate-pulse-soft" /> Alive
             </span>
+          ) : r.status === 'RESCUED' ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-signal-thrive/30 px-2.5 py-1 font-mono text-[11px] text-signal-thrive">
+              <Award className="h-3 w-3" /> {statusLabel[r.status]}
+            </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-fog/20 px-2.5 py-1 font-mono text-[11px] text-fog-muted">
               {r.status === 'LOST' ? <Skull className="h-3 w-3" /> : null} {statusLabel[r.status]}
@@ -91,6 +98,40 @@ export function RunDetail({ open, onClose, run, onContinue, canAct, isOwner, ref
             </button>
           )}
         </div>
+
+        {/* Survival Stakes: stake, and claim for rescued survivors */}
+        {Number(r.stake ?? '0') > 0 && (
+          <div className="mt-4 rounded-lg border border-fog/10 bg-base-900/40 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="font-mono text-xs text-fog-muted">
+                Stake <span className="text-fog">{fromAtto(r.stake)} GEN</span>
+                {r.status === 'RESCUED' && r.claimed && Number(r.payout) > 0 && (
+                  <span className="ml-3 text-signal-thrive">claimed {fromAtto(r.payout)} GEN</span>
+                )}
+              </div>
+              {r.status === 'RESCUED' && isOwner && !r.claimed && (
+                <button
+                  onClick={() => onClaim(r)}
+                  disabled={!canAct || claiming}
+                  className="btn-amber inline-flex items-center gap-2 rounded px-4 py-2 text-sm"
+                >
+                  {claiming ? <Loader2 className="h-4 w-4 animate-spin-slow" /> : <Award className="h-4 w-4" />}
+                  {canAct ? 'Claim stake + pot share' : 'Connect to claim'}
+                </button>
+              )}
+              {r.status === 'RESCUED' && r.claimed && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-signal-thrive/30 px-2.5 py-1 font-mono text-[11px] text-signal-thrive">
+                  <Award className="h-3 w-3" /> Reward claimed
+                </span>
+              )}
+            </div>
+            {r.status === 'RESCUED' && !r.claimed && (
+              <p className="mt-2 text-xs leading-relaxed text-fog-muted">
+                You survived to rescue day {r.rescue_day}. Claim returns your stake plus a bonus from the pot (capped at the pot balance).
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="mt-7 flex items-center gap-2 border-t border-fog/8 pt-6">
           <h3 className="font-mono text-base font-semibold uppercase tracking-wide text-fog">Field journal</h3>

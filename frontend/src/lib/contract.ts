@@ -14,9 +14,14 @@ export const explorerAddr = (addr: string) => `${EXPLORER}/address/${addr}`;
 
 export const readClient = createClient({ chain: testnetBradbury });
 
+// Create the wallet client with just { chain, account }. genlayer-js delegates
+// signing to the injected wallet and runs all RPC polling through its own
+// transport (integer JSON-RPC ids). Passing `provider` routed extra RPC calls
+// through the wallet, whose string ids the GenLayer RPC rejects. The `provider`
+// arg is kept for call-site compatibility but intentionally unused.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const makeWalletClient = (account: `0x${string}`, provider: any): any =>
-  createClient({ chain: testnetBradbury, account, provider });
+export const makeWalletClient = (account: `0x${string}`, _provider?: any): any =>
+  createClient({ chain: testnetBradbury, account });
 
 const RETRYABLE = /rate limit|429|timeout|network|fetch|temporarily|ECONN|socket/i;
 

@@ -22,9 +22,10 @@ interface Props {
   canSubmit: boolean;
   needsChainSwitch?: boolean;
   onConnect: () => void;
+  onViewRun?: (run: Run) => void;
 }
 
-export function ActionModal({ open, onClose, run, tx, canSubmit, needsChainSwitch, onConnect }: Props) {
+export function ActionModal({ open, onClose, run, tx, canSubmit, needsChainSwitch, onConnect, onViewRun }: Props) {
   const toast = useToast();
   const [text, setText] = useState('');
   const [confirming, setConfirming] = useState(false);
@@ -51,6 +52,13 @@ export function ActionModal({ open, onClose, run, tx, canSubmit, needsChainSwitc
     if (busy) return;
     reset();
     onClose();
+  };
+  // After the verdict is sealed, open the expedition log so the user can read it.
+  const viewVerdict = () => {
+    const r = run;
+    reset();
+    onClose();
+    if (r) onViewRun?.(r);
   };
 
   const submit = async () => {
@@ -85,7 +93,7 @@ export function ActionModal({ open, onClose, run, tx, canSubmit, needsChainSwitc
             Your fate for the day is sealed on-chain. Open the expedition log to read the verdict and see
             your vitality update.
           </p>
-          <button onClick={close} className="btn-amber mt-6 rounded px-6 py-2.5 text-sm">
+          <button onClick={viewVerdict} className="btn-amber mt-6 rounded px-6 py-2.5 text-sm">
             Read the verdict
           </button>
         </div>

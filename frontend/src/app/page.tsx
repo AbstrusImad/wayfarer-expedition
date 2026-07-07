@@ -187,6 +187,7 @@ function Wayfarer() {
         canSubmit={canSubmit}
         needsChainSwitch={needsChainSwitch}
         onConnect={requireConnect}
+        onViewRun={(r) => setDetailRun(r)}
       />
       <RunDetail
         open={!!detailRun}

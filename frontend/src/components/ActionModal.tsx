@@ -20,10 +20,11 @@ interface Props {
   run: Run | null;
   tx: ReturnType<typeof useTransaction>;
   canSubmit: boolean;
+  needsChainSwitch?: boolean;
   onConnect: () => void;
 }
 
-export function ActionModal({ open, onClose, run, tx, canSubmit, onConnect }: Props) {
+export function ActionModal({ open, onClose, run, tx, canSubmit, needsChainSwitch, onConnect }: Props) {
   const toast = useToast();
   const [text, setText] = useState('');
   const [confirming, setConfirming] = useState(false);
@@ -127,7 +128,7 @@ export function ActionModal({ open, onClose, run, tx, canSubmit, onConnect }: Pr
               className="btn-amber flex w-full items-center justify-center gap-2 rounded py-3.5"
             >
               <Send className="h-4 w-4" />
-              {canSubmit ? 'Submit to the warden' : 'Connect wallet to act'}
+              {canSubmit ? 'Submit to the warden' : needsChainSwitch ? 'Switch to Bradbury' : 'Connect wallet to act'}
             </button>
           ) : (
             <fm.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-lg border border-amber/25 bg-amber/5 p-4">

@@ -101,9 +101,42 @@ export function useWallet() {
     }
   }, []);
 
+  // Switch (or add) the Bradbury network. Usable on its own when the wallet is
+  // connected but sitting on the wrong chain, so the user is not stuck seeing a
+  // misleading "connect wallet" button.
+  const switchChain = useCallback(async () => {
+    const provider = getProvider();
+    if (!provider) {
+      setState((s) => ({ ...s, hasProvider: false, error: 'No wallet detected' }));
+      return;
+    }
+    setState((s) => ({ ...s, error: null }));
+    try {
+      try {
+        await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAIN_ID_HEX }] });
+      } catch (err) {
+        // 4902: unknown chain -> add it, then switch.
+        const code = (err as { code?: number })?.code;
+        if (code === 4902 || /unrecognized|not been added|add/i.test(String((err as { message?: string })?.message || ''))) {
+          await provider.request({ method: 'wallet_addEthereumChain', params: [BRADBURY_PARAMS] });
+          await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAIN_ID_HEX }] });
+        } else {
+          throw err;
+        }
+      }
+      const cid: string = await provider.request({ method: 'eth_chainId' });
+      setState((s) => ({ ...s, chainId: parseInt(cid, 16) }));
+    } catch (e) {
+      const msg = /user rejected|denied/i.test(String(e))
+        ? 'You declined the network switch'
+        : 'Could not switch to the GenLayer Bradbury network';
+      setState((s) => ({ ...s, error: msg }));
+    }
+  }, []);
+
   const disconnect = useCallback(() => setState((s) => ({ ...s, address: null })), []);
 
   const onCorrectChain = state.chainId === CHAIN_ID;
 
-  return { ...state, connect, disconnect, onCorrectChain };
+  return { ...state, connect, disconnect, switchChain, onCorrectChain };
 }

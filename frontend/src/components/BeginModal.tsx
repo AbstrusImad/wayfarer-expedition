@@ -27,10 +27,11 @@ interface Props {
   scenarios: Scenario[];
   tx: ReturnType<typeof useTransaction>;
   canSubmit: boolean;
+  needsChainSwitch?: boolean;
   onConnect: () => void;
 }
 
-export function BeginModal({ open, onClose, scenarios, tx, canSubmit, onConnect }: Props) {
+export function BeginModal({ open, onClose, scenarios, tx, canSubmit, needsChainSwitch, onConnect }: Props) {
   const toast = useToast();
   const list = scenarios.length ? scenarios : FALLBACK_SCENARIOS;
   const [picked, setPicked] = useState<string | null>(null);
@@ -156,7 +157,7 @@ export function BeginModal({ open, onClose, scenarios, tx, canSubmit, onConnect 
               className="btn-amber flex w-full items-center justify-center gap-2 rounded py-3.5"
             >
               <Compass className="h-4 w-4" />
-              {canSubmit ? 'Set out' : 'Connect wallet to begin'}
+              {canSubmit ? 'Set out' : needsChainSwitch ? 'Switch to Bradbury' : 'Connect wallet to begin'}
             </button>
           ) : (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-lg border border-amber/25 bg-amber/5 p-4">

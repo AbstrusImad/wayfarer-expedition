@@ -64,7 +64,10 @@ function Wayfarer() {
   };
   const requireConnect = () => {
     if (!wallet.address) wallet.connect();
+    else if (!wallet.onCorrectChain) wallet.switchChain();
   };
+  // Connected but on the wrong network: offer a switch, not a misleading connect.
+  const needsChainSwitch = !!wallet.address && !wallet.onCorrectChain;
 
   const ownerOf = (r: Run) => !!wallet.address && r.owner.toLowerCase() === wallet.address.toLowerCase();
 
@@ -120,13 +123,17 @@ function Wayfarer() {
               >
                 <RefreshCw className={`h-4 w-4 ${data.loading ? 'animate-spin-slow' : ''}`} />
               </button>
-              {wallet.address ? (
-                <button onClick={() => setBeginOpen(true)} disabled={!wallet.onCorrectChain} className="btn-amber flex items-center gap-2 rounded px-5 py-3 text-sm">
-                  <Compass className="h-4 w-4" /> Begin expedition
-                </button>
-              ) : (
+              {!wallet.address ? (
                 <button onClick={wallet.connect} className="btn-amber flex items-center gap-2 rounded px-5 py-3 text-sm">
                   <Wallet className="h-4 w-4" /> Connect to play
+                </button>
+              ) : needsChainSwitch ? (
+                <button onClick={wallet.switchChain} className="btn-amber flex items-center gap-2 rounded px-5 py-3 text-sm">
+                  <Wallet className="h-4 w-4" /> Switch to Bradbury
+                </button>
+              ) : (
+                <button onClick={() => setBeginOpen(true)} className="btn-amber flex items-center gap-2 rounded px-5 py-3 text-sm">
+                  <Compass className="h-4 w-4" /> Begin expedition
                 </button>
               )}
             </div>
@@ -137,7 +144,10 @@ function Wayfarer() {
           ) : data.error && data.runs.length === 0 ? (
             <ErrorState message={data.error} onRetry={() => data.refresh()} />
           ) : data.runs.length === 0 ? (
-            <EmptyState onCreate={() => (wallet.address ? setBeginOpen(true) : wallet.connect())} canCreate={!!wallet.address} />
+            <EmptyState
+              onCreate={() => (canSubmit ? setBeginOpen(true) : requireConnect())}
+              canCreate={canSubmit}
+            />
           ) : (
             <motion.div layout className="grid grid-cols-1 gap-6 md:grid-cols-2">
               {data.runs.map((r, i) => (
@@ -166,6 +176,7 @@ function Wayfarer() {
         scenarios={data.scenarios}
         tx={tx}
         canSubmit={canSubmit}
+        needsChainSwitch={needsChainSwitch}
         onConnect={requireConnect}
       />
       <ActionModal
@@ -174,6 +185,7 @@ function Wayfarer() {
         run={actionRun}
         tx={tx}
         canSubmit={canSubmit}
+        needsChainSwitch={needsChainSwitch}
         onConnect={requireConnect}
       />
       <RunDetail
